@@ -1,5 +1,7 @@
 # DOOM fire effect
 
+[viewable here](https://charlesworth.github.io/doomFire/flames.html)
+
 Play around with fire particles.
 
 `S`: stop animation
