@@ -109,7 +109,6 @@
                     firePixels[(FIRE_HEIGHT-1)*FIRE_WIDTH + i] = 36;
                 }
 
-                // TODO add to parent scope so not always re-initialising
                 var frontbuffer = document.getElementById('frontbuffer');
 
                 if (fullScreen === true) {
@@ -174,7 +173,7 @@
                 }
 
                 canvas.getContext("2d").putImageData(color, 0, 0);
-                // TODO work out cross origin problem
+                // TODO work out cross origin problem with adding images
                 // canvas.getContext("2d").drawImage(document.getElementById('name'), 0, 0, canvas.width, canvas.height);
                 
                 var frontbuffer = document.getElementById('frontbuffer');
@@ -209,7 +208,6 @@
     <body onload="start();">
         <!-- backbuffer and name are hidden elements as they are only used by the frontbuffer -->
         <canvas id="backbuffer" width="320" height="168" style="border: 1px solid black;" hidden=true></canvas>
-        <img id="name" src="test.png" hidden=1/>
 
         <!-- frontbuffer is the canvas visable to the user -->
         <canvas id="frontbuffer" width="200" height="200"></canvas>
