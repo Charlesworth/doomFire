@@ -7,14 +7,21 @@
         <script src="easeljs-0.6.0.min.js"></script>
         <script type="text/javascript">
             
-            var CJS_TICKER_FPS =27;
-            var FIRE_WIDTH =  320;
-            var FIRE_HEIGHT = 168 
+            var CJS_TICKER_FPS = 30;
+            var FIRE_WIDTH = 320;
+            var FIRE_HEIGHT = 168;
     
-            var palette = [];
+            var backgroundColor = 'white';
+            let fullScreen = true;
+            let runAnimation = true;
 
             // Palette based framebuffer. Coordinate system origin upper-left.
             var firePixels = [];
+
+            // This heatmap is a series of 37 rgb values from black -> red -> yellow -> white
+            // describing the color lifecycle of a fire particle. It is populated using rgbs
+            // and the subsequent for loop
+            var palette = [];
             
             var rgbs = [
                 0x07,0x07,0x07,
@@ -56,8 +63,8 @@
                 0xFF,0xFF,0xFF
             ];
 
-             // Populate pallete.
-            for(var i = 0; i < rgbs.length; i++) {
+            // Populate pallete.
+            for(var i = 0; i < 37; i++) {
                 palette[i] = {
                     r : rgbs[i * 3 + 0], 
                     g : rgbs[i * 3 + 1], 
@@ -65,7 +72,32 @@
                 }
             }
 
-            y_scrolling = 440;
+            window.addEventListener("keydown", event => {
+                if (event.key == "s") {
+                    toggleAnimation();
+                }
+
+                if (event.key == "d") {
+                    reduceFireIntensity();
+                }
+
+                if (event.key == "a") {
+                    increaseFireIntensity();
+                }
+            });
+
+            function toggleAnimation() {
+                if (runAnimation === true) {
+                    document.body.style.background = "red";
+                    createjs.Ticker.removeEventListener("tick", hostFrame);
+                    runAnimation = false;
+                } else {
+                    document.body.style.background = "white";
+                    createjs.Ticker.addEventListener("tick", hostFrame);                        
+                    runAnimation = true;
+                }
+            }
+
             function setup() {
                 // Set whole screen to 0 (color: 0x07,0x07,0x07)
                 for(var i = 0; i < FIRE_WIDTH*FIRE_HEIGHT; i++) {
@@ -76,21 +108,28 @@
                 for(var i = 0; i < FIRE_WIDTH; i++) {
                     firePixels[(FIRE_HEIGHT-1)*FIRE_WIDTH + i] = 36;
                 }
-                y_scrolling = 440;
+
+                // TODO add to parent scope so not always re-initialising
+                let frontbuffer = document.getElementById('frontbuffer');
+
+                if (fullScreen === true) {
+                    frontbuffer.width = document.body.clientWidth - 20;
+                    frontbuffer.height = document.body.clientHeight - 16;
+                }
+
+                // keep the pixelated look that we all crave by disabling smoothing
+                frontbuffer.getContext("2d").imageSmoothingEnabled = false;
+
+                console.log(palette);
             }
 
             function start() {
+                setup();
                 stage = new createjs.Stage("backbuffer");
                 createjs.Ticker.addEventListener("tick", hostFrame);
                 createjs.Ticker.setFPS(CJS_TICKER_FPS);
-                container = new createjs.Container();
-                stage.addChild(container);
-                setup();
             }
-            
 
-            /***********************************************/
-            /**************** MEAT STARTS HERE *************/
             function spreadFire(src) {
                 var pixel = firePixels[src];
                 if(pixel == 0) {
@@ -102,22 +141,19 @@
                 }
             }
             
-            function doFire() {
+            function fireTick() {
                 for(x=0 ; x < FIRE_WIDTH; x++) {
+                    // row y=0 is never updated as this white line is the fire generator
                     for (y = 1; y < FIRE_HEIGHT; y++) {
                         spreadFire(y * FIRE_WIDTH + x);
                     }
                 }
             }
-            /***********************************************/
-            /*************** MEAT ENDS HERE ****************/
-            /***********************************************/
 
-            y_scrolling = 540;
             function hostFrame() {
 
-                // Update palette buffer
-                doFire();
+                // Update the firePixels
+                fireTick();
                 
                 canvas = document.getElementById('backbuffer')
                 color = canvas.getContext("2d").getImageData(0, 0, canvas.width, canvas.height);
@@ -133,100 +169,53 @@
                         color.data[((canvas.width * y) + x) * 4 + 2] = pixel.b;
                         if (pixel.r == 0x07 && pixel.g == 0x07 && pixel.b == 0x07) {
                             color.data[((canvas.width * y) + x) * 4 + 3] = 0;
-                        } else 
+                        } else {
                             // Black pixels need to be transparent to show DOOM logo
                             color.data[((canvas.width * y) + x) * 4 + 3] = 255;
+                        }
                     }
                 }
-
                 
                 canvas.getContext("2d").putImageData(color, 0, 0);
-                
+                canvas.getContext("2d").drawImage(document.getElementById('name'), 0, 0, canvas.width, canvas.height);
+
                 var frontbuffer = document.getElementById('frontbuffer');
-                frontbuffer.getContext("2d").fillStyle = 'black';
+                
+                // clear frame
+                frontbuffer.getContext("2d").fillStyle = backgroundColor;
                 frontbuffer.getContext("2d").fillRect(0, 0, frontbuffer.width, frontbuffer.height);
-                frontbuffer.getContext("2d").imageSmoothingEnabled = false;
-                frontbuffer.getContext("2d").drawImage(document.getElementById('doom'), 50, y_scrolling,  (frontbuffer.width - 100) , frontbuffer.height/2);
+                
                 frontbuffer.getContext("2d").drawImage(canvas,0,0, frontbuffer.width, frontbuffer.height);
-                if (y_scrolling != 70)
-                    y_scrolling-=2;
-                else {
-                  // Stop fire
-                  for(var y = 167; y > 160; y--) {  
-                    for(var x = 0; x < canvas.width; x++) {
-                      if (firePixels[y * canvas.width + x] > 0)
-                        firePixels[y * canvas.width + x]-= Math.round(Math.random()) & 3;
-                      else {
-                        // Stop animation altogether
-                        //createjs.Ticker.setFPS(0);
-                      }
-                    }
-                  }  
-                }   
+  
                 // Swap buffer
                 stage.update();
+            }
+
+            function reduceFireIntensity() {
+                for(var i = 0; i < FIRE_WIDTH; i++) {
+                    if (firePixels[(FIRE_HEIGHT-1)*FIRE_WIDTH + i] > 0) {
+                        firePixels[(FIRE_HEIGHT-1)*FIRE_WIDTH + i] -= Math.round(Math.random()) & 3;
+                    }
+                }
+            }
+
+            function increaseFireIntensity() {
+                for(var i = 0; i < FIRE_WIDTH; i++) {
+                    if (firePixels[(FIRE_HEIGHT-1)*FIRE_WIDTH + i] < 36) {
+                        firePixels[(FIRE_HEIGHT-1)*FIRE_WIDTH + i] += 1;
+                    }
+                }
             }
             
         </script>
     </head>
     
     <body onload="start();">
+        <!-- backbuffer and name are hidden elements as they are only used by the frontbuffer -->
         <canvas id="backbuffer" width="320" height="168" style="border: 1px solid black;" hidden=true></canvas>
-        <img id='doom' src="doom.png" width="379" height="260" hidden=1/>
-        <style>
-        td {
-            height: 15px;
-            font-size:0px;
-            border: 1px solid black;
-        }
-        table {
-    border-collapse: collapse;
-}
-        </style>
+        <img id="name" src="test.png" hidden=1/>
 
-       <table>
-        <tr><td>
-
-        <canvas id="frontbuffer" width="640" height="509" style="border: 1px solid black;"></canvas>
-        </td>
-         <td>
-         <table width=40 border=1>
-            <tr><td style="background-color: #070707">&nbsp;tabtabdssfsgsd</td></tr>
-            <tr><td style="background-color: #1f0707">&nbsp;</td></tr>
-            <tr><td style="background-color: #2f0f07">&nbsp;</td></tr>
-
-            <tr><td style="background-color: #571707">&nbsp;</td></tr>
-            <tr><td style="background-color: #671f07">&nbsp;</td></tr>
-            <tr><td style="background-color: #771f07">&nbsp;</td></tr>
-            <tr><td style="background-color: #8f2707">&nbsp;</td></tr>
-            <tr><td style="background-color: #9f2f07">&nbsp;</td></tr>
-            <tr><td style="background-color: #af3f07">&nbsp;</td></tr>
-            <tr><td style="background-color: #bf4707">&nbsp;</td></tr>
-            <tr><td style="background-color: #c74707">&nbsp;</td></tr>
-            <tr><td style="background-color: #df4f07">&nbsp;</td></tr>
-            <tr><td style="background-color: #df5707">&nbsp;</td></tr>
-            <tr><td style="background-color: #df5707">&nbsp;</td></tr>
-            <tr><td style="background-color: #d7670f">&nbsp;</td></tr>
-            <tr><td style="background-color: #cf6f0f">&nbsp;</td></tr>
-            <tr><td style="background-color: #cf770f">&nbsp;</td></tr>
-            <tr><td style="background-color: #cf7f0f">&nbsp;</td></tr>
-            <tr><td style="background-color: #CF8717">&nbsp;</td></tr>
-            <tr><td style="background-color: #C78717">&nbsp;</td></tr>
-            <tr><td style="background-color: #C78F17">&nbsp;</td></tr>
-            <tr><td style="background-color: #C7971F">&nbsp;</td></tr>
-            <tr><td style="background-color: #BF9F1F">&nbsp;</td></tr>
-            <tr><td style="background-color: #BF9F1F">&nbsp;</td></tr>
-            <tr><td style="background-color: #BFA727">&nbsp;</td></tr>
-            <tr><td style="background-color: #BFA727">&nbsp;</td></tr>
-            <tr><td style="background-color: #BFAF2F">&nbsp;</td></tr>
-            <tr><td style="background-color: #B7AF2F">&nbsp;</td></tr>
-            <tr><td style="background-color: #B7B72F">&nbsp;</td></tr>
-            <tr><td style="background-color: #B7B737">&nbsp;</td></tr>
-            <tr><td style="background-color: #CFCF6F">&nbsp;</td></tr>
-            <tr><td style="background-color: #DFDF9F">&nbsp;</td></tr>
-            <tr><td style="background-color: #EFEFC7">&nbsp;</td></tr>
-            <tr><td style="background-color: #FFFFFF">&nbsp;</td></tr>                            
-        </table>
-    </td></tr></table>
+        <!-- frontbuffer is the canvas visable to the user -->
+        <canvas id="frontbuffer" width="200" height="200"></canvas>
     </body>
 </html>
